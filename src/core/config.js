@@ -18,6 +18,9 @@ function parseInput() {
     apiKey: process.env.CLOUDFLARED_API_KEY || process.env.CLOUDFLARED_GLOBAL_API_KEY || '',
     email: process.env.CLOUDFLARED_EMAIL || '',
     accountId: process.env.CLOUDFLARED_ACCOUNT_ID || '',
+    tunnelToken: process.env.CLOUDFLARED_TUNNEL_TOKEN || '',
+    zoneId: process.env.CLOUDFLARED_ZONE_ID || '',
+    zoneName: process.env.CLOUDFLARED_ZONE_NAME || '',
     tunnels: [],
     cwd: process.env.TOOL_CWD || process.env.CLOUDFLARED_CWD || process.cwd(),
     cloudflaredPath: process.env.CLOUDFLARED_EXE_PATH || '',
@@ -57,6 +60,54 @@ function parseInput() {
   }
   
   return config;
+}
+
+/**
+ * Report configuration status before validation
+ * @param {object} config - Configuration to assess
+ * @returns {{missing: string[], present: string[]}}
+ */
+function reportConfigStatus(config) {
+  const present = [];
+  const missing = [];
+
+  if (config.apiKey) {
+    present.push('CLOUDFLARED_API_KEY');
+  } else {
+    missing.push('CLOUDFLARED_API_KEY');
+  }
+
+  if (config.email) {
+    present.push('CLOUDFLARED_EMAIL');
+  } else {
+    missing.push('CLOUDFLARED_EMAIL');
+  }
+
+  if (config.accountId) {
+    present.push('CLOUDFLARED_ACCOUNT_ID');
+  } else {
+    missing.push('CLOUDFLARED_ACCOUNT_ID');
+  }
+
+  if (config.tunnelToken) {
+    present.push('CLOUDFLARED_TUNNEL_TOKEN');
+  }
+
+  if (config.zoneId) {
+    present.push('CLOUDFLARED_ZONE_ID');
+  } else if (config.zoneName) {
+    present.push('CLOUDFLARED_ZONE_NAME');
+  } else {
+    missing.push('CLOUDFLARED_ZONE_ID|CLOUDFLARED_ZONE_NAME (optional but recommended)');
+  }
+
+  if (config.tunnels.length > 0) {
+    present.push(`CLOUDFLARED_TUNNEL_* (${config.tunnels.length})`);
+  } else {
+    missing.push('CLOUDFLARED_TUNNEL_1+');
+  }
+
+  return { missing, present };
 }
 
 /**
@@ -201,8 +252,18 @@ function getTmpDir(cwd) {
   return path.join(getRunnerDataDir(cwd), 'tmp');
 }
 
+/**
+ * Get bin directory path
+ * @param {string} cwd - Current working directory
+ * @returns {string} Bin directory path
+ */
+function getBinDir(cwd) {
+  return path.join(getRunnerDataDir(cwd), 'bin');
+}
+
 module.exports = {
   parseInput,
+  reportConfigStatus,
   validate,
   getRunnerDataDir,
   getLogsDir,
@@ -211,5 +272,6 @@ module.exports = {
   getDataServicesDir,
   getCredentialsDir,
   getConfigDir,
-  getTmpDir
+  getTmpDir,
+  getBinDir
 };

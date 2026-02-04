@@ -160,20 +160,34 @@ class CloudflareClient {
    * @returns {Promise<string|null>} Zone ID or null
    */
   async getZoneIdByDomain(domain) {
-    // Extract root domain from hostname
-    const parts = domain.split('.');
-    const rootDomain = parts.slice(-2).join('.');
-    
+    if (this.config.zoneId) {
+      this.logger.info(`Using configured Zone ID: ${this.config.zoneId}`);
+      return this.config.zoneId;
+    }
+
     this.logger.logApiCall('GET', '/zones');
-    
+
     const response = await httpAdapter.get(
       '/zones',
       this.getRequestOptions()
     );
-    
+
     const zones = response.result || [];
+
+    if (this.config.zoneName) {
+      const zoneByName = zones.find(z => z.name === this.config.zoneName);
+      return zoneByName ? zoneByName.id : null;
+    }
+
+    // Fallback: guess root domain from hostname (may be incorrect for complex TLDs)
+    const parts = domain.split('.');
+    const rootDomain = parts.slice(-2).join('.');
     const zone = zones.find(z => z.name === rootDomain);
-    
+
+    if (!zone) {
+      this.logger.warn(`Unable to resolve zone using root domain guess: ${rootDomain}`);
+    }
+
     return zone ? zone.id : null;
   }
   

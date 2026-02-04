@@ -43,12 +43,25 @@ function timestamp() {
  * @param {number} showLength - Number of characters to show
  * @returns {string} Masked value
  */
-function maskSensitive(value, showLength = 4) {
-  if (!value || value.length <= showLength) {
+function maskSensitive(value, options = {}) {
+  const {
+    showStart = 2,
+    showEnd = 2
+  } = options;
+
+  if (!value) {
     return 'xxx-Masked-xxx';
   }
+
   const totalLength = value.length;
-  return `xxx-Masked:${totalLength}-xxx`;
+  const start = value.slice(0, showStart);
+  const end = value.slice(-showEnd);
+
+  if (totalLength <= showStart + showEnd) {
+    return `xxx-Masked:${totalLength}-xxx`;
+  }
+
+  return `${start}xxx-Masked:${totalLength}-xxx${end}`;
 }
 
 function colorize(level, message) {

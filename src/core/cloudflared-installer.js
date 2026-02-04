@@ -2,8 +2,9 @@ const path = require('path');
 const os = require('os');
 const { commandExists, execute, executeWithSudoFallback, isWindows } = require('../adapters/process-adapter');
 const { downloadFile } = require('../adapters/http-adapter');
-const { exists, makeExecutable } = require('../adapters/fs-adapter');
+const { exists, makeExecutable, ensureDir } = require('../adapters/fs-adapter');
 const { ProcessError } = require('../utils/errors');
+const { getBinDir, getTmpDir } = require('./config');
 
 /**
  * Cloudflared installer
@@ -86,7 +87,9 @@ class CloudflaredInstaller {
   async downloadWindowsBinary() {
     const arch = os.arch() === 'x64' ? 'amd64' : '386';
     const url = `https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-${arch}.exe`;
-    const destPath = path.join(process.cwd(), 'cloudflared.exe');
+    const binDir = getBinDir(this.config.cwd);
+    ensureDir(binDir);
+    const destPath = path.join(binDir, 'cloudflared.exe');
     
     this.logger.info(`Downloading cloudflared from ${url}...`);
     await downloadFile(url, destPath);
@@ -106,7 +109,12 @@ class CloudflaredInstaller {
     
     // Download the latest version
     const url = `https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${arch}`;
-    const tempPath = '/tmp/cloudflared';
+    const tempDir = getTmpDir(this.config.cwd);
+    ensureDir(tempDir);
+    const tempPath = path.join(tempDir, 'cloudflared');
+    const binDir = getBinDir(this.config.cwd);
+    ensureDir(binDir);
+    const targetPath = path.join(binDir, 'cloudflared');
     
     this.logger.info(`Downloading cloudflared from ${url}...`);
     await downloadFile(url, tempPath);
@@ -115,27 +123,28 @@ class CloudflaredInstaller {
     makeExecutable(tempPath);
     
     // Try to move to /usr/local/bin with sudo
-    this.logger.info('Installing to /usr/local/bin/cloudflared...');
+    this.logger.info(`Installing to ${targetPath}...`);
     
     try {
-      const result = await executeWithSudoFallback('mv', [tempPath, '/usr/local/bin/cloudflared'], {
+      const result = await executeWithSudoFallback('mv', [tempPath, targetPath], {
         logger: this.logger
       });
       
       if (result.code === 0) {
         // Set permissions
-        await executeWithSudoFallback('chmod', ['755', '/usr/local/bin/cloudflared'], {
+        await executeWithSudoFallback('chmod', ['755', targetPath], {
           logger: this.logger
         });
         
-        this.logger.success('cloudflared installed to /usr/local/bin/cloudflared');
+        this.logger.success(`cloudflared installed to ${targetPath}`);
+        this.config.cloudflaredPath = targetPath;
       } else {
         // Fallback: keep in temp location
-        this.logger.warn('Could not install to /usr/local/bin, using temporary location');
+        this.logger.warn(`Could not install to ${targetPath}, using temporary location`);
         this.config.cloudflaredPath = tempPath;
       }
     } catch (error) {
-      this.logger.warn(`Installation to /usr/local/bin failed: ${error.message}`);
+      this.logger.warn(`Installation to ${targetPath} failed: ${error.message}`);
       this.config.cloudflaredPath = tempPath;
     }
   }
