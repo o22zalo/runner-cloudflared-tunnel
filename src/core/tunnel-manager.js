@@ -318,7 +318,11 @@ class TunnelManager {
 
     const cloudflaredPath = await this.installer.getCloudflaredPath();
 
+    const token = this.tunnelData?.token;
     this.logger.info(`Starting cloudflared with config: ${configPath}`);
+    if (token) {
+      this.logger.info("Passing tunnel token to cloudflared run command.");
+    }
 
     // Ensure log file exists
     ensureDir(path.dirname(logPath));
@@ -329,7 +333,12 @@ class TunnelManager {
     let child;
     try {
       // Start cloudflared as detached process
-      child = spawnDetached(cloudflaredPath, ["tunnel", "--config", configPath, "run"], {
+      const args = ["tunnel", "--config", configPath, "run"];
+      if (token) {
+        args.push("--token", token);
+      }
+
+      child = spawnDetached(cloudflaredPath, args, {
         cwd: this.config.cwd,
         stdout: logFd,
         stderr: logFd,
