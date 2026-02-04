@@ -3,7 +3,7 @@
  * Exports all public APIs
  */
 
-const { parseInput, validate } = require('./core/config');
+const { parseInput, reportConfigStatus, validate } = require('./core/config');
 const { plan } = require('./core/plan');
 const TunnelManager = require('./core/tunnel-manager');
 const CloudflareClient = require('./core/cloudflare-client');
@@ -30,6 +30,12 @@ async function startTunnels(options = {}) {
     logFile: options.logFile || null,
     commandName: options.commandName || 'cloudflared-tunnel-start'
   });
+
+  // Log configuration (mask sensitive values)
+  logger.logConfig(config, ['apiKey', 'tunnelToken']);
+  const status = reportConfigStatus(config);
+  logger.info(`Config present: ${status.present.join(', ') || 'none'}`);
+  logger.info(`Config missing: ${status.missing.join(', ') || 'none'}`);
   
   // Validate configuration
   validate(config);

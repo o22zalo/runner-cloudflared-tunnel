@@ -2,7 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const CloudflareClient = require("./cloudflare-client");
 const CloudflaredInstaller = require("./cloudflared-installer");
-const { getCredentialsDir, getConfigDir, getCloudflaredLogsDir, getPidDir, getDataServicesDir, getTmpDir } = require("./config");
+const { getCredentialsDir, getConfigDir, getCloudflaredLogsDir, getPidDir, getDataServicesDir, getTmpDir, getBinDir } = require("./config");
 const { ensureDir, writeJson, writeText, readText, verifyPermissions, isWindows } = require("../adapters/fs-adapter");
 const { spawnDetached } = require("../adapters/process-adapter");
 const { sleep } = require("../utils/time");
@@ -65,7 +65,8 @@ class TunnelManager {
       getCloudflaredLogsDir(this.config.cwd),
       getPidDir(this.config.cwd),
       getDataServicesDir(this.config.cwd),
-      getTmpDir(this.config.cwd)
+      getTmpDir(this.config.cwd),
+      getBinDir(this.config.cwd)
     ];
 
     dirs.forEach((dir) => {
@@ -88,9 +89,14 @@ class TunnelManager {
     const tunnelInfo = await this.client.getOrCreateTunnel(plan.tunnelName);
 
     // Get tunnel token for fallback usage
-    this.logger.info("Fetching tunnel token...");
-    const token = await this.client.getTunnelToken(tunnelInfo.id);
-    this.logger.success("Tunnel token retrieved");
+    let token = this.config.tunnelToken;
+    if (token) {
+      this.logger.info("Using tunnel token from CLOUDFLARED_TUNNEL_TOKEN");
+    } else {
+      this.logger.info("Fetching tunnel token from Cloudflare API...");
+      token = await this.client.getTunnelToken(tunnelInfo.id);
+      this.logger.success("Tunnel token retrieved");
+    }
 
     // Create credentials file
     await this.createCredentialsFile(tunnelInfo, token);
@@ -123,8 +129,9 @@ class TunnelManager {
     this.logger.info(`Creating credentials file: ${credentialsPath}`);
 
     if (!tunnelInfo.tunnelSecret) {
-      this.logger.warn('Tunnel secret not available for existing tunnel; falling back to token-based credentials.');
-      this.logger.warn('Hint: Recreate the tunnel if you need a static TunnelSecret for credentials.');
+      this.logger.warn('Tunnel secret not available for existing tunnel.');
+      this.logger.warn('Using tunnel token as credentials fallback (may not work for all setups).');
+      this.logger.warn('Hint: Recreate the tunnel to obtain a static TunnelSecret if cloudflared fails.');
     }
 
     const credentials = {

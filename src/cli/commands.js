@@ -2,7 +2,7 @@ const { Command } = require('commander');
 const path = require('path');
 const packageJson = require('../../package.json');
 const logger = require('../utils/logger');
-const { parseInput, validate, getLogsDir } = require('../core/config');
+const { parseInput, reportConfigStatus, validate, getLogsDir } = require('../core/config');
 const { plan } = require('../core/plan');
 const TunnelManager = require('../core/tunnel-manager');
 const { handleError } = require('../utils/errors');
@@ -69,7 +69,10 @@ async function runTunnelStart(options) {
     logger.info(`Log file: ${logFile}`);
     
     // Log configuration (mask sensitive values)
-    logger.logConfig(config, ['apiKey']);
+    logger.logConfig(config, ['apiKey', 'tunnelToken']);
+    const status = reportConfigStatus(config);
+    logger.info(`Config present: ${status.present.join(', ') || 'none'}`);
+    logger.info(`Config missing: ${status.missing.join(', ') || 'none'}`);
     
     // Validate configuration
     logger.section('Validating Configuration');
