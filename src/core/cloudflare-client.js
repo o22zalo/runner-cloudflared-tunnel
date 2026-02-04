@@ -90,6 +90,22 @@ class CloudflareClient {
     
     return response.result;
   }
+
+  /**
+   * Get tunnel connections by tunnel ID
+   * @param {string} tunnelId - Tunnel ID
+   * @returns {Promise<Array>} List of active connections
+   */
+  async getTunnelConnections(tunnelId) {
+    this.logger.logApiCall('GET', `/accounts/${this.accountId}/cfd_tunnel/${tunnelId}/connections`);
+
+    const response = await httpAdapter.get(
+      `/accounts/${this.accountId}/cfd_tunnel/${tunnelId}/connections`,
+      this.getRequestOptions()
+    );
+
+    return response.result || [];
+  }
   
   /**
    * Get or create tunnel
