@@ -24,11 +24,18 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+      - name: npm-install
+        run: |
+          npm i
+          npm i -g @tltdh61/dotenvrtdb
       - name: runner-cloudflared-tunnel
         env:
-          DOTENVRTDB_URL: ${{ secrets.DOTENVRTDB_URL }}
-          SSH_RUNNER_PUBLIC_KEY: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCbXm/9+wS1+1LgS+5H4Vd/k4Kk3/Y+u5o/j8W19+t5/6T7bYpMv8sP user@example.com"
+          DOTENVRTDB_URL_RUNNER: ${{ secrets.DOTENVRTDB_URL_RUNNER }}
         run: |
           npm i
           npx @hugginroonin/runner-add-ssh
-          node ./bin/cloudflared-tunnel-start.js --verbose
+          dotenvrtdb --eUrl "$DOTENVRTDB_URL_RUNNER" -- npx --yes @ongtrieuhau861457/runner-tailscale-sync
+          dotenvrtdb --eUrl "$DOTENVRTDB_URL_RUNNER" -- node ./bin/cloudflared-tunnel-start.js --verbose
+      - name: ⏳ Keep Alive
+        run: |
+          npx --yes @ongtrieuhau861457/runner-keep-alive --interval 60 --services All
