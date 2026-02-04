@@ -190,6 +190,26 @@ function getStats(filePath) {
 }
 
 /**
+ * Verify file permissions (Linux/Mac only)
+ * @param {string} filePath - File path
+ * @param {number} expectedMode - Expected permission mode
+ * @returns {{ok: boolean, actualMode: number|null}}
+ */
+function verifyPermissions(filePath, expectedMode) {
+  if (isWindows) {
+    return { ok: true, actualMode: null };
+  }
+
+  const stats = getStats(filePath);
+  if (!stats) {
+    return { ok: false, actualMode: null };
+  }
+
+  const actualMode = stats.mode & 0o777;
+  return { ok: actualMode === expectedMode, actualMode };
+}
+
+/**
  * Check if path is directory
  * @param {string} dirPath - Directory path
  * @returns {boolean}
@@ -228,5 +248,6 @@ module.exports = {
   getStats,
   isDirectory,
   makeExecutable,
+  verifyPermissions,
   isWindows
 };

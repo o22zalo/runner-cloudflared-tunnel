@@ -69,7 +69,13 @@ function handleError(error, logger) {
     if (error.stderr) {
       logger.error('stderr: ' + error.stderr);
     }
-    logger.info('Hint: Check the logs at .runner-data/logs/ for more details');
+    if (error.stderr && error.stderr.toLowerCase().includes('permission')) {
+      logger.info('Hint: Permission denied detected. Ensure the runner user can sudo or has write access.');
+    } else if (error.stderr && error.stderr.toLowerCase().includes('not found')) {
+      logger.info('Hint: Command not found. Verify cloudflared is installed or set CLOUDFLARED_EXE_PATH.');
+    } else {
+      logger.info('Hint: Check the logs at .runner-data/logs/ for more details');
+    }
     process.exit(error.exitCode);
   } else if (error instanceof CloudflareApiError) {
     logger.error('Cloudflare API Error: ' + error.message);
@@ -81,7 +87,7 @@ function handleError(error, logger) {
     process.exit(error.exitCode);
   } else if (error instanceof ConfigError) {
     logger.error('Configuration Error: ' + error.message);
-    logger.info('Hint: Check your .env file and environment variables');
+    logger.info('Hint: Check your .env file and environment variables. Ensure tunnel entries share the same name.');
     process.exit(error.exitCode);
   } else {
     logger.error('Unknown Error: ' + error.message, error);

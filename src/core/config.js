@@ -22,7 +22,9 @@ function parseInput() {
     cwd: process.env.TOOL_CWD || process.env.CLOUDFLARED_CWD || process.cwd(),
     cloudflaredPath: process.env.CLOUDFLARED_EXE_PATH || '',
     logLevel: process.env.CLOUDFLARED_LOG_LEVEL || 'info',
-    timeout: parseInt(process.env.CLOUDFLARED_TIMEOUT || '30000', 10)
+    timeout: parseInt(process.env.CLOUDFLARED_TIMEOUT || '30000', 10),
+    verifyRetries: parseInt(process.env.CLOUDFLARED_VERIFY_RETRIES || '3', 10),
+    verifyDelay: parseInt(process.env.CLOUDFLARED_VERIFY_DELAY || '3000', 10)
   };
   
   // Parse tunnel configurations
@@ -107,11 +109,10 @@ function validate(config) {
     }
   });
   
-  // Check for duplicate tunnel names
-  const tunnelNames = config.tunnels.map(t => t.name);
-  const duplicates = tunnelNames.filter((name, index) => tunnelNames.indexOf(name) !== index);
-  if (duplicates.length > 0) {
-    errors.push(`Duplicate tunnel names found: ${duplicates.join(', ')}`);
+  // Require a single tunnel name for multiple services
+  const tunnelNames = Array.from(new Set(config.tunnels.map(t => t.name)));
+  if (tunnelNames.length > 1) {
+    errors.push(`All tunnel entries must share the same tunnel name. Found: ${tunnelNames.join(', ')}`);
   }
   
   // Check for duplicate hostnames
@@ -191,6 +192,15 @@ function getConfigDir(cwd) {
   return path.join(getRunnerDataDir(cwd), 'config');
 }
 
+/**
+ * Get temp directory path
+ * @param {string} cwd - Current working directory
+ * @returns {string} Temp directory path
+ */
+function getTmpDir(cwd) {
+  return path.join(getRunnerDataDir(cwd), 'tmp');
+}
+
 module.exports = {
   parseInput,
   validate,
@@ -200,5 +210,6 @@ module.exports = {
   getPidDir,
   getDataServicesDir,
   getCredentialsDir,
-  getConfigDir
+  getConfigDir,
+  getTmpDir
 };

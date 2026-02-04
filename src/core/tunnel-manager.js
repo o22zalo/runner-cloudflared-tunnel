@@ -2,8 +2,8 @@ const path = require("path");
 const fs = require("fs");
 const CloudflareClient = require("./cloudflare-client");
 const CloudflaredInstaller = require("./cloudflared-installer");
-const { getCredentialsDir, getConfigDir, getCloudflaredLogsDir, getPidDir } = require("./config");
-const { ensureDir, writeJson, writeText, readJson, readText } = require("../adapters/fs-adapter");
+const { getCredentialsDir, getConfigDir, getCloudflaredLogsDir, getPidDir, getDataServicesDir, getTmpDir } = require("./config");
+const { ensureDir, writeJson, writeText, readText, verifyPermissions, isWindows } = require("../adapters/fs-adapter");
 const { spawnDetached } = require("../adapters/process-adapter");
 const { sleep } = require("../utils/time");
 const { ProcessError } = require("../utils/errors");
@@ -20,7 +20,7 @@ class TunnelManager {
     this.logger = logger;
     this.client = new CloudflareClient(config, logger);
     this.installer = new CloudflaredInstaller(config, logger);
-    this.tunnelData = [];
+    this.tunnelData = null;
   }
 
   /**
@@ -36,10 +36,12 @@ class TunnelManager {
     // Step 2: Setup directories
     this.setupDirectories();
 
-    // Step 3: Process each tunnel
-    for (const tunnel of this.config.tunnels) {
-      await this.processTunnel(tunnel);
-    }
+    // Step 3: Process tunnel and services plan
+    const plan = this.config.plan || {
+      tunnelName: this.config.tunnels[0]?.name,
+      services: this.config.tunnels
+    };
+    await this.processTunnel(plan);
 
     // Step 4: Generate config file
     await this.generateConfigFile();
@@ -62,6 +64,8 @@ class TunnelManager {
       getConfigDir(this.config.cwd),
       getCloudflaredLogsDir(this.config.cwd),
       getPidDir(this.config.cwd),
+      getDataServicesDir(this.config.cwd),
+      getTmpDir(this.config.cwd)
     ];
 
     dirs.forEach((dir) => {
@@ -73,17 +77,17 @@ class TunnelManager {
   }
 
   /**
-   * Process single tunnel configuration
-   * @param {object} tunnel - Tunnel configuration
+   * Process single tunnel configuration with multiple services
+   * @param {object} plan - Planned tunnel configuration
    * @returns {Promise<void>}
    */
-  async processTunnel(tunnel) {
-    this.logger.section(`Processing Tunnel: ${tunnel.name}`);
+  async processTunnel(plan) {
+    this.logger.section(`Processing Tunnel: ${plan.tunnelName}`);
 
     // Get or create tunnel
-    const tunnelInfo = await this.client.getOrCreateTunnel(tunnel.name);
+    const tunnelInfo = await this.client.getOrCreateTunnel(plan.tunnelName);
 
-    // Get tunnel token
+    // Get tunnel token for fallback usage
     this.logger.info("Fetching tunnel token...");
     const token = await this.client.getTunnelToken(tunnelInfo.id);
     this.logger.success("Tunnel token retrieved");
@@ -92,17 +96,19 @@ class TunnelManager {
     await this.createCredentialsFile(tunnelInfo, token);
 
     // Setup DNS record
-    await this.setupDnsRecord(tunnel.hostname, tunnelInfo.id);
+    for (const service of plan.services) {
+      await this.setupDnsRecord(service.hostname, tunnelInfo.id);
+    }
 
     // Store tunnel data
-    this.tunnelData.push({
-      tunnel,
+    this.tunnelData = {
       tunnelInfo,
       token,
       credentialsPath: this.getCredentialsPath(tunnelInfo.id),
-    });
+      services: plan.services
+    };
 
-    this.logger.success(`Tunnel ${tunnel.name} processed successfully`);
+    this.logger.success(`Tunnel ${plan.tunnelName} processed successfully`);
   }
 
   /**
@@ -116,13 +122,27 @@ class TunnelManager {
 
     this.logger.info(`Creating credentials file: ${credentialsPath}`);
 
+    if (!tunnelInfo.tunnelSecret) {
+      this.logger.warn('Tunnel secret not available for existing tunnel; falling back to token-based credentials.');
+      this.logger.warn('Hint: Recreate the tunnel if you need a static TunnelSecret for credentials.');
+    }
+
     const credentials = {
       AccountTag: this.config.accountId,
-      TunnelSecret: token,
+      TunnelSecret: tunnelInfo.tunnelSecret || token,
       TunnelID: tunnelInfo.id,
     };
 
     writeJson(credentialsPath, credentials, 0o600);
+
+    const permissionCheck = verifyPermissions(credentialsPath, 0o600);
+    if (!permissionCheck.ok) {
+      const modeText = permissionCheck.actualMode ? permissionCheck.actualMode.toString(8) : 'unknown';
+      this.logger.warn(`Credentials file permissions mismatch (expected 600, actual ${modeText}).`);
+      if (!isWindows) {
+        this.logger.warn('Hint: Ensure the runner user can chmod the credentials file to 600.');
+      }
+    }
 
     this.logger.success("Credentials file created");
   }
@@ -165,8 +185,8 @@ class TunnelManager {
 
     const ingress = [];
 
-    // Add entries for each tunnel
-    this.tunnelData.forEach(({ tunnel }) => {
+    // Add entries for each service
+    this.tunnelData.services.forEach((tunnel) => {
       ingress.push({
         hostname: tunnel.hostname,
         service: `${tunnel.ip}:${tunnel.port}`,
@@ -178,12 +198,9 @@ class TunnelManager {
       service: "http_status:404",
     });
 
-    // Use first tunnel's credentials
-    const firstTunnel = this.tunnelData[0];
-
     const config = {
-      tunnel: firstTunnel.tunnelInfo.id,
-      "credentials-file": firstTunnel.credentialsPath,
+      tunnel: this.tunnelData.tunnelInfo.id,
+      "credentials-file": this.tunnelData.credentialsPath,
       ingress: ingress,
     };
 
@@ -280,51 +297,61 @@ class TunnelManager {
     const logPath = path.join(getCloudflaredLogsDir(this.config.cwd), "cloudflared.log");
     const pidPath = path.join(getPidDir(this.config.cwd), "cloudflared.pid");
 
-    // Wait for tunnel to initialize
-    this.logger.info("Waiting for tunnel to initialize...");
-    await sleep(this.config.timeout || 5000);
+    const retries = Math.max(1, this.config.verifyRetries || 1);
+    const delayMs = this.config.verifyDelay || 3000;
+    let lastLogContent = '';
 
-    // Check if PID file exists
-    const pidContent = readText(pidPath); // ✅ ĐÚNG
-    if (!pidContent) {
-      this.logger.error("PID file not found");
-      throw new ProcessError("Tunnel failed to start - PID file not found", 1, "");
-    }
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      this.logger.info(`Waiting for tunnel to initialize (attempt ${attempt}/${retries})...`);
+      await sleep(this.config.timeout || 5000);
 
-    const pid = parseInt(pidContent.trim(), 10);
-    this.logger.info(`Found PID: ${pid}`);
-
-    // ✅ THÊM: Check process đang chạy
-    if (!isProcessRunning(pid)) {
-      this.logger.error(`Process ${pid} is not running`);
-
-      // Check logs for error
-      const logContent = readText(logPath) || "";
-      if (logContent) {
-        this.logger.error("Last logs:");
-        const lastLines = logContent.split("\n").slice(-20).join("\n");
-        this.logger.error(lastLines);
+      const pidContent = readText(pidPath);
+      if (!pidContent) {
+        this.logger.warn("PID file not found yet.");
+        if (attempt < retries) {
+          await sleep(delayMs);
+          continue;
+        }
+        throw new ProcessError("Tunnel failed to start - PID file not found", 1, "");
       }
 
-      throw new ProcessError("Cloudflared process died after start", 1, "");
-    }
+      const pid = parseInt(pidContent.trim(), 10);
+      this.logger.info(`Found PID: ${pid}`);
 
-    this.logger.success(`Process is running (PID: ${pid})`);
+      if (!isProcessRunning(pid)) {
+        this.logger.warn(`Process ${pid} is not running yet.`);
+        lastLogContent = readText(logPath) || "";
+        if (attempt < retries) {
+          await sleep(delayMs);
+          continue;
+        }
+        if (lastLogContent) {
+          this.logger.error("Last logs:");
+          const lastLines = lastLogContent.split("\n").slice(-20).join("\n");
+          this.logger.error(lastLines);
+        }
+        throw new ProcessError("Cloudflared process died after start", 1, "");
+      }
 
-    // Check log file for errors
-    const { readText } = require("../adapters/fs-adapter");
-    const logContent = readText(logPath) || "";
+      this.logger.success(`Process is running (PID: ${pid})`);
+      lastLogContent = readText(logPath) || "";
 
-    if (logContent.includes("error") || logContent.includes("failed")) {
-      this.logger.error("Errors found in cloudflared logs:");
-      this.logger.error(logContent);
-      throw new ProcessError("Tunnel failed to start - check logs for details", 1, logContent);
-    }
+      if (lastLogContent.includes("error") || lastLogContent.includes("failed")) {
+        this.logger.error("Errors found in cloudflared logs:");
+        this.logger.error(lastLogContent);
+        throw new ProcessError("Tunnel failed to start - check logs for details", 1, lastLogContent);
+      }
 
-    if (logContent.includes("Registered tunnel connection")) {
-      this.logger.success("Tunnel is running successfully!");
-    } else {
-      this.logger.warn("Tunnel may still be initializing - check logs for status");
+      if (lastLogContent.includes("Registered tunnel connection")) {
+        this.logger.success("Tunnel is running successfully!");
+        break;
+      }
+
+      if (attempt === retries) {
+        this.logger.warn("Tunnel may still be initializing - check logs for status");
+      } else {
+        await sleep(delayMs);
+      }
     }
 
     this.logger.info(`Full logs available at: ${logPath}`);
@@ -339,12 +366,12 @@ class TunnelManager {
 
     const report = {
       success: true,
-      tunnelsConfigured: this.tunnelData.length,
-      tunnels: this.tunnelData.map(({ tunnel, tunnelInfo }) => ({
-        name: tunnel.name,
-        hostname: tunnel.hostname,
-        service: `${tunnel.ip}:${tunnel.port}`,
-        tunnelId: tunnelInfo.id,
+      tunnelsConfigured: 1,
+      tunnels: this.tunnelData.services.map((service) => ({
+        name: service.name,
+        hostname: service.hostname,
+        service: `${service.ip}:${service.port}`,
+        tunnelId: this.tunnelData.tunnelInfo.id,
         status: "running",
       })),
       configFile: path.join(getConfigDir(this.config.cwd), "config.yml"),

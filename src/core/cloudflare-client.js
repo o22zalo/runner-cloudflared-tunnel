@@ -58,6 +58,7 @@ class CloudflareClient {
    * @returns {Promise<object>} Created tunnel object
    */
   async createTunnel(name) {
+    const tunnelSecret = this.generateTunnelSecret();
     this.logger.logApiCall('POST', `/accounts/${this.accountId}/cfd_tunnel`, { name });
     this.logger.info(`Creating tunnel: ${name}`);
     
@@ -65,13 +66,13 @@ class CloudflareClient {
       `/accounts/${this.accountId}/cfd_tunnel`,
       {
         name,
-        tunnel_secret: this.generateTunnelSecret()
+        tunnel_secret: tunnelSecret
       },
       this.getRequestOptions()
     );
     
     this.logger.success(`Tunnel created: ${name} (ID: ${response.result.id})`);
-    return response.result;
+    return { ...response.result, tunnelSecret };
   }
   
   /**
@@ -100,7 +101,7 @@ class CloudflareClient {
     
     if (tunnel) {
       this.logger.info(`Tunnel already exists: ${name} (ID: ${tunnel.id})`);
-      return tunnel;
+      return { ...tunnel, tunnelSecret: null };
     }
     
     return await this.createTunnel(name);

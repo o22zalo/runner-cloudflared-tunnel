@@ -177,7 +177,7 @@ class CloudflaredInstaller {
     }
     
     try {
-      const result = await execute(cloudflaredPath, ['--version'], {
+      const result = await executeWithSudoFallback(cloudflaredPath, ['--version'], {
         logger: this.logger
       });
       

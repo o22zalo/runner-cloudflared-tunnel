@@ -157,7 +157,8 @@ async function executeWithSudoFallback(command, args = [], options = {}) {
     
     // Sudo failed, try without
     if (logger) {
-      logger.warn(`Sudo failed (code ${result.code}), falling back to non-sudo execution`);
+      const stderrText = result.stderr ? ` stderr: ${result.stderr}` : '';
+      logger.warn(`Sudo failed (code ${result.code})${stderrText}, falling back to non-sudo execution`);
     }
   } catch (error) {
     if (logger) {
