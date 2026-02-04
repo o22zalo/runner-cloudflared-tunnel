@@ -8,8 +8,11 @@ const { ValidationError, ConfigError } = require('../utils/errors');
 
 /**
  * Parse tunnel configuration from environment variables
- * Expected format: CLOUDFLARED_TUNNEL_{INDEX}=tunnelname:hostname:ip:port
+ * Expected format:
+ *   CLOUDFLARED_TUNNEL_{INDEX}=tunnelname:hostname:ip:port
+ *   CLOUDFLARED_TUNNEL_{INDEX}=tunnelname:hostname:protocol:ip:port
  * Example: CLOUDFLARED_TUNNEL_1=ssh-tunnel:ssh.example.com:localhost:22
+ * Example: CLOUDFLARED_TUNNEL_2=web-tunnel:web.example.com:http:localhost:8080
  * 
  * @returns {object} Parsed configuration
  */
@@ -39,19 +42,30 @@ function parseInput() {
     }
     
     const parts = tunnelEnv.split(':');
-    if (parts.length !== 4) {
+    if (parts.length !== 4 && parts.length !== 5) {
       throw new ConfigError(
         `Invalid tunnel configuration at CLOUDFLARED_TUNNEL_${index}: ${tunnelEnv}. ` +
-        `Expected format: tunnelname:hostname:ip:port`
+        `Expected format: tunnelname:hostname:ip:port or tunnelname:hostname:protocol:ip:port`
       );
     }
     
-    const [name, hostname, ip, port] = parts;
+    let name;
+    let hostname;
+    let protocol = '';
+    let ip;
+    let port;
+
+    if (parts.length === 5) {
+      [name, hostname, protocol, ip, port] = parts;
+    } else {
+      [name, hostname, ip, port] = parts;
+    }
     
     config.tunnels.push({
       index,
       name: name.trim(),
       hostname: hostname.trim(),
+      protocol: protocol.trim(),
       ip: ip.trim(),
       port: port.trim()
     });

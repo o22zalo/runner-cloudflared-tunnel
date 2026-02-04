@@ -46,8 +46,9 @@ CLOUDFLARED_ACCOUNT_ID=your_account_id
 
 # Tunnel configurations (index starts from 1)
 # Format: tunnelname:hostname:ip:port
+# Optional: tunnelname:hostname:protocol:ip:port
 CLOUDFLARED_TUNNEL_1=ssh-tunnel:ssh.example.com:localhost:22
-CLOUDFLARED_TUNNEL_2=web-tunnel:web.example.com:localhost:8080
+CLOUDFLARED_TUNNEL_2=web-tunnel:web.example.com:http:localhost:8080
 CLOUDFLARED_TUNNEL_3=api-tunnel:api.example.com:localhost:3000
 ```
 

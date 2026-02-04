@@ -10,7 +10,7 @@ Setup a single SSH tunnel:
 export CLOUDFLARED_API_KEY="your_api_key"
 export CLOUDFLARED_EMAIL="you@example.com"
 export CLOUDFLARED_ACCOUNT_ID="your_account_id"
-export CLOUDFLARED_TUNNEL_1="ssh-runner:ssh.myrunner.com:localhost:22"
+export CLOUDFLARED_TUNNEL_1="ssh-runner:ssh.myrunner.com:ssh:localhost:22"
 
 cloudflared-tunnel-start
 ```
