@@ -196,7 +196,7 @@ class TunnelManager {
     this.tunnelData.services.forEach((tunnel) => {
       ingress.push({
         hostname: tunnel.hostname,
-        service: `${tunnel.ip}:${tunnel.port}`,
+        service: this.buildServiceUrl(tunnel),
       });
     });
 
@@ -221,6 +221,57 @@ class TunnelManager {
     this.logger.verbose(yamlContent);
 
     return configPath;
+  }
+
+  /**
+   * Build a cloudflared service URL for the tunnel
+   * @param {object} tunnel - Tunnel service configuration
+   * @returns {string} Service URL
+   */
+  buildServiceUrl(tunnel) {
+    const normalizedProtocol = this.normalizeProtocol(tunnel.protocol);
+    const protocol = normalizedProtocol || this.inferProtocol(tunnel);
+    return `${protocol}://${tunnel.ip}:${tunnel.port}`;
+  }
+
+  /**
+   * Normalize protocol value
+   * @param {string} protocol - Protocol value
+   * @returns {string} Normalized protocol
+   */
+  normalizeProtocol(protocol) {
+    if (!protocol) return "";
+    return protocol.trim().toLowerCase().replace(/:\/\//g, "");
+  }
+
+  /**
+   * Infer protocol based on tunnel name and port
+   * @param {object} tunnel - Tunnel service configuration
+   * @returns {string} Protocol
+   */
+  inferProtocol(tunnel) {
+    const portNum = parseInt(tunnel.port, 10);
+    const name = (tunnel.name || "").toLowerCase();
+
+    if (portNum === 22 || portNum === 2222 || name.includes("ssh")) {
+      return "ssh";
+    }
+
+    if (portNum === 443) {
+      return "https";
+    }
+
+    const httpPorts = new Set([80, 3000, 3001, 3002, 3003, 4200, 5000, 5173, 8080, 8081]);
+    if (httpPorts.has(portNum)) {
+      return "http";
+    }
+
+    const tcpPorts = new Set([1433, 1521, 27017, 3306, 5432, 6379]);
+    if (tcpPorts.has(portNum)) {
+      return "tcp";
+    }
+
+    return "tcp";
   }
 
   /**
@@ -383,7 +434,7 @@ class TunnelManager {
       tunnels: this.tunnelData.services.map((service) => ({
         name: service.name,
         hostname: service.hostname,
-        service: `${service.ip}:${service.port}`,
+        service: this.buildServiceUrl(service),
         tunnelId: this.tunnelData.tunnelInfo.id,
         status: "running",
       })),
