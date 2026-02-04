@@ -36,7 +36,7 @@ jobs:
           DOTENVRTDB_URL_RUNNER: ${{ secrets.DOTENVRTDB_URL_RUNNER }}
         run: |
           dotenvrtdb --eUrl "$DOTENVRTDB_URL_RUNNER" -- runner-add-ssh --verbose
-          dotenvrtdb --eUrl "$DOTENVRTDB_URL_RUNNER" -- runner-tailscale-sync --verbose
+          dotenvrtdb --eUrl "$DOTENVRTDB_URL_RUNNER" -- runner-sync --verbose
           dotenvrtdb --eUrl "$DOTENVRTDB_URL_RUNNER" -- node ./bin/cloudflared-tunnel-start.js --verbose
       - name: ⏳ Keep Alive
         run: |
