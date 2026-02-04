@@ -400,12 +400,6 @@ class TunnelManager {
       this.logger.success(`Process is running (PID: ${pid})`);
       lastLogContent = readText(logPath) || "";
 
-      if (lastLogContent.includes("error") || lastLogContent.includes("failed")) {
-        this.logger.error("Errors found in cloudflared logs:");
-        this.logger.error(lastLogContent);
-        throw new ProcessError("Tunnel failed to start - check logs for details", 1, lastLogContent);
-      }
-
       if (lastLogContent.includes("Registered tunnel connection")) {
         this.logger.success("Tunnel is running successfully!");
         break;
