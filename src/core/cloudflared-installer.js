@@ -15,7 +15,16 @@ class CloudflaredInstaller {
   constructor(config, logger) {
     this.config = config;
     this.logger = logger;
-    this.customPath = config.cloudflaredPath;
+    this.customPath = config.cloudflaredPath || '';
+  }
+
+  /**
+   * Update cloudflared path in both instance and config
+   * @param {string} cloudflaredPath - Path to cloudflared executable
+   */
+  setCloudflaredPath(cloudflaredPath) {
+    this.customPath = cloudflaredPath || '';
+    this.config.cloudflaredPath = this.customPath;
   }
   
   /**
@@ -95,7 +104,7 @@ class CloudflaredInstaller {
     await downloadFile(url, destPath);
     
     this.logger.success(`cloudflared downloaded to ${destPath}`);
-    this.config.cloudflaredPath = destPath;
+    this.setCloudflaredPath(destPath);
   }
   
   /**
@@ -137,15 +146,15 @@ class CloudflaredInstaller {
         });
         
         this.logger.success(`cloudflared installed to ${targetPath}`);
-        this.config.cloudflaredPath = targetPath;
+        this.setCloudflaredPath(targetPath);
       } else {
         // Fallback: keep in temp location
         this.logger.warn(`Could not install to ${targetPath}, using temporary location`);
-        this.config.cloudflaredPath = tempPath;
+        this.setCloudflaredPath(tempPath);
       }
     } catch (error) {
       this.logger.warn(`Installation to ${targetPath} failed: ${error.message}`);
-      this.config.cloudflaredPath = tempPath;
+      this.setCloudflaredPath(tempPath);
     }
   }
   
