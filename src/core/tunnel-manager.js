@@ -272,16 +272,22 @@ class TunnelManager {
     // Ensure log file exists
     ensureDir(path.dirname(logPath));
 
-    // Open log file
-    const logStream = fs.createWriteStream(logPath, { flags: "a" });
+    // Open log file (sync) to ensure a valid fd for detached stdio
+    const logFd = fs.openSync(logPath, "a");
 
-    // Start cloudflared as detached process
-    const child = spawnDetached(cloudflaredPath, ["tunnel", "--config", configPath, "run"], {
-      cwd: this.config.cwd,
-      stdout: logStream,
-      stderr: logStream,
-      logger: this.logger,
-    });
+    let child;
+    try {
+      // Start cloudflared as detached process
+      child = spawnDetached(cloudflaredPath, ["tunnel", "--config", configPath, "run"], {
+        cwd: this.config.cwd,
+        stdout: logFd,
+        stderr: logFd,
+        logger: this.logger,
+      });
+    } finally {
+      // Close parent fd; child keeps its own handle
+      fs.closeSync(logFd);
+    }
 
     // Save PID
     writeText(pidPath, child.pid.toString(), 0o644);
