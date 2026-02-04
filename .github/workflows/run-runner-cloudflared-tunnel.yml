@@ -28,14 +28,16 @@ jobs:
         run: |
           npm i
           npm i -g @tltdh61/dotenvrtdb
+          npm i -g @hugginroonin/runner-add-ssh
+          npm i -g @ongtrieuhau861457/runner-tailscale-sync
+          npm i -g @ongtrieuhau861457/runner-keep-alive
       - name: runner-cloudflared-tunnel
         env:
           DOTENVRTDB_URL_RUNNER: ${{ secrets.DOTENVRTDB_URL_RUNNER }}
         run: |
-          npm i
-          npx @hugginroonin/runner-add-ssh
-          dotenvrtdb --eUrl "$DOTENVRTDB_URL_RUNNER" -- npx --yes @ongtrieuhau861457/runner-tailscale-sync
+          runner-add-ssh
+          dotenvrtdb --eUrl "$DOTENVRTDB_URL_RUNNER" -- runner-tailscale-sync
           dotenvrtdb --eUrl "$DOTENVRTDB_URL_RUNNER" -- node ./bin/cloudflared-tunnel-start.js --verbose
       - name: ⏳ Keep Alive
         run: |
-          npx --yes @ongtrieuhau861457/runner-keep-alive --interval 60 --services All
+          runner-keep-alive --interval 60 --services All
