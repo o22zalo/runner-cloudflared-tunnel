@@ -360,10 +360,15 @@ class TunnelManager {
 
     const logPath = path.join(getCloudflaredLogsDir(this.config.cwd), "cloudflared.log");
     const pidPath = path.join(getPidDir(this.config.cwd), "cloudflared.pid");
+    const tunnelId = this.tunnelData?.tunnelInfo?.id;
 
     const retries = Math.max(1, this.config.verifyRetries || 1);
     const delayMs = this.config.verifyDelay || 3000;
     let lastLogContent = '';
+
+    if (!tunnelId) {
+      this.logger.warn("Tunnel ID not available for API verification.");
+    }
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       this.logger.info(`Waiting for tunnel to initialize (attempt ${attempt}/${retries})...`);
@@ -399,6 +404,16 @@ class TunnelManager {
 
       this.logger.success(`Process is running (PID: ${pid})`);
       lastLogContent = readText(logPath) || "";
+
+      if (tunnelId) {
+        this.logger.info(`Checking tunnel connections via API (ID: ${tunnelId})...`);
+        const connections = await this.client.getTunnelConnections(tunnelId);
+        if (connections.length > 0) {
+          this.logger.success(`Tunnel is active via API with ${connections.length} connection(s).`);
+          break;
+        }
+        this.logger.warn("No active tunnel connections reported by API yet.");
+      }
 
       if (lastLogContent.includes("Registered tunnel connection")) {
         this.logger.success("Tunnel is running successfully!");
