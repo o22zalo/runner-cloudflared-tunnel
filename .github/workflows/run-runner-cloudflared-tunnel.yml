@@ -15,7 +15,7 @@ permissions:
 jobs:
   runner-cloudflared-tunnel:
     runs-on: ubuntu-latest
-    timeout-minutes: 3 # Set the maximum runtime for this job to 20 minutes
+    timeout-minutes: 30 # Set the maximum runtime for this job to 20 minutes
     steps:
       - uses: actions/checkout@v4
         with:
