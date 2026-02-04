@@ -4,6 +4,7 @@
  */
 
 const { parseInput, validate } = require('./core/config');
+const { plan } = require('./core/plan');
 const TunnelManager = require('./core/tunnel-manager');
 const CloudflareClient = require('./core/cloudflare-client');
 const CloudflaredInstaller = require('./core/cloudflared-installer');
@@ -26,14 +27,18 @@ async function startTunnels(options = {}) {
   logger.init(packageJson.name, packageJson.version, {
     verbose: options.verbose || false,
     quiet: options.quiet || false,
-    logFile: options.logFile || null
+    logFile: options.logFile || null,
+    commandName: options.commandName || 'cloudflared-tunnel-start'
   });
   
   // Validate configuration
   validate(config);
+
+  // Plan execution
+  const planResult = plan(config, logger);
   
   // Execute tunnel setup
-  const manager = new TunnelManager(config, logger);
+  const manager = new TunnelManager({ ...config, plan: planResult }, logger);
   await manager.execute();
   
   // Return report
@@ -61,5 +66,6 @@ module.exports = {
   // Utilities
   logger,
   parseInput,
-  validate
+  validate,
+  plan
 };

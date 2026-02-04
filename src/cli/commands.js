@@ -3,6 +3,7 @@ const path = require('path');
 const packageJson = require('../../package.json');
 const logger = require('../utils/logger');
 const { parseInput, validate, getLogsDir } = require('../core/config');
+const { plan } = require('../core/plan');
 const TunnelManager = require('../core/tunnel-manager');
 const { handleError } = require('../utils/errors');
 const { getVietnamDate } = require('../utils/time');
@@ -54,12 +55,15 @@ async function runTunnelStart(options) {
     logger.init(packageJson.name, packageJson.version, {
       verbose: options.verbose,
       quiet: options.quiet,
-      logFile
+      logFile,
+      commandName: 'cloudflared-tunnel-start'
     });
     
     // Log startup information
     logger.section('Cloudflare Tunnel Manager');
+    logger.info(`Đang thực thi version: ${packageJson.version}`);
     logger.info(`Version: ${packageJson.version}`);
+    logger.info('Command: cloudflared-tunnel-start');
     logger.info(`Date: ${getVietnamDate()}`);
     logger.info(`Working directory: ${config.cwd}`);
     logger.info(`Log file: ${logFile}`);
@@ -72,8 +76,11 @@ async function runTunnelStart(options) {
     validate(config);
     logger.success('Configuration is valid');
     
+    // Plan execution
+    const planResult = plan(config, logger);
+
     // Execute tunnel setup
-    const manager = new TunnelManager(config, logger);
+    const manager = new TunnelManager({ ...config, plan: planResult }, logger);
     await manager.execute();
     
     // Generate and display report

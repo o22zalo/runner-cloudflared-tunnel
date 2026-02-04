@@ -20,6 +20,12 @@ Package Node.js hoàn chỉnh để tạo và quản lý Cloudflare tunnels cho 
 ✅ **File Management**: Permissions, atomic writes, directory structure  
 ✅ **Documentation**: README, EXAMPLES, ARCHITECTURE, CHANGELOG  
 
+## ✅ Ghi Chú Cập Nhật Gần Đây
+
+- Bổ sung bước `plan()` để đảm bảo mô hình **1 tunnel – nhiều dịch vụ** theo yêu cầu nghiệp vụ.
+- Cải thiện logging: thêm command vào prefix, hỗ trợ màu cho console, và log dòng bắt buộc “Đang thực thi version: X”.
+- Tăng độ an toàn vận hành: kiểm tra quyền file credentials, retry verify, và bổ sung đầy đủ layout `.runner-data/`.
+
 ## 📁 Cấu Trúc File (File Tree)
 
 ```

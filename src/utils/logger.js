@@ -11,13 +11,17 @@ const { ensureDir } = require('../adapters/fs-adapter');
 let logLevel = 'info'; // 'quiet', 'info', 'verbose'
 let logFile = null;
 let packageInfo = { name: 'unknown', version: '0.0.0' };
+let commandName = 'unknown';
+let useColor = true;
 
 /**
  * Initialize logger with package info
  */
 function init(pkgName, pkgVersion, options = {}) {
   packageInfo = { name: pkgName, version: pkgVersion };
+  commandName = options.commandName || commandName;
   logLevel = options.verbose ? 'verbose' : (options.quiet ? 'quiet' : 'info');
+  useColor = options.color !== undefined ? options.color : process.stdout.isTTY;
   
   if (options.logFile) {
     logFile = options.logFile;
@@ -47,6 +51,23 @@ function maskSensitive(value, showLength = 4) {
   return `xxx-Masked:${totalLength}-xxx`;
 }
 
+function colorize(level, message) {
+  if (!useColor || process.env.NO_COLOR) {
+    return message;
+  }
+
+  const colors = {
+    info: '\x1b[36m',
+    warn: '\x1b[33m',
+    error: '\x1b[31m',
+    success: '\x1b[32m',
+    verbose: '\x1b[90m'
+  };
+  const reset = '\x1b[0m';
+  const color = colors[level] || '';
+  return color ? `${color}${message}${reset}` : message;
+}
+
 /**
  * Write to log file
  */
@@ -66,8 +87,12 @@ function writeToFile(message) {
  */
 function formatMessage(level, message) {
   const ts = timestamp();
-  const prefix = `[${ts}] [${packageInfo.name}@${packageInfo.version}] [${level.toUpperCase()}]`;
+  const prefix = `[${ts}] [${packageInfo.name}@${packageInfo.version}] [${commandName}] [${level.toUpperCase()}]`;
   return `${prefix} ${message}`;
+}
+
+function formatConsoleMessage(level, message) {
+  return colorize(level, formatMessage(level, message));
 }
 
 /**
@@ -77,7 +102,8 @@ function info(message) {
   if (logLevel === 'quiet') return;
   
   const formatted = formatMessage('info', message);
-  console.log(formatted);
+  const consoleFormatted = formatConsoleMessage('info', message);
+  console.log(consoleFormatted);
   writeToFile(formatted);
 }
 
@@ -88,7 +114,8 @@ function verbose(message) {
   if (logLevel !== 'verbose') return;
   
   const formatted = formatMessage('verbose', message);
-  console.log(formatted);
+  const consoleFormatted = formatConsoleMessage('verbose', message);
+  console.log(consoleFormatted);
   writeToFile(formatted);
 }
 
@@ -97,7 +124,8 @@ function verbose(message) {
  */
 function warn(message) {
   const formatted = formatMessage('warn', message);
-  console.warn(formatted);
+  const consoleFormatted = formatConsoleMessage('warn', message);
+  console.warn(consoleFormatted);
   writeToFile(formatted);
 }
 
@@ -106,7 +134,8 @@ function warn(message) {
  */
 function error(message, err) {
   const formatted = formatMessage('error', message);
-  console.error(formatted);
+  const consoleFormatted = formatConsoleMessage('error', message);
+  console.error(consoleFormatted);
   
   if (err && err.stack) {
     console.error(err.stack);
@@ -123,7 +152,8 @@ function success(message) {
   if (logLevel === 'quiet') return;
   
   const formatted = formatMessage('success', message);
-  console.log(formatted);
+  const consoleFormatted = formatConsoleMessage('success', message);
+  console.log(consoleFormatted);
   writeToFile(formatted);
 }
 
@@ -135,7 +165,8 @@ function section(title) {
   
   const separator = '='.repeat(60);
   const formatted = formatMessage('info', `\n${separator}\n${title}\n${separator}`);
-  console.log(formatted);
+  const consoleFormatted = formatConsoleMessage('info', `\n${separator}\n${title}\n${separator}`);
+  console.log(consoleFormatted);
   writeToFile(formatted);
 }
 
@@ -150,7 +181,7 @@ function logConfig(config, sensitiveKeys = []) {
     const value = config[key];
     const isSensitive = sensitiveKeys.includes(key);
     const displayValue = isSensitive ? maskSensitive(value) : value;
-    info(`  ${key}: ${displayValue}`);
+    info(`  ${key}:${isSensitive ? displayValue : ` ${displayValue}`}`);
   });
 }
 
